@@ -34,7 +34,6 @@ const char *FILTERADD="filteradd";
 const char *FILTERCLEAR="filterclear";
 const char *REJECT="reject";
 const char *SENDHEADERS="sendheaders";
-const char *FEEFILTER="feefilter";
 const char *SENDCMPCT="sendcmpct";
 const char *CMPCTBLOCK="cmpctblock";
 const char *GETBLOCKTXN="getblocktxn";
@@ -66,7 +65,6 @@ const static std::string allNetMessageTypes[] = {
     NetMsgType::FILTERCLEAR,
     NetMsgType::REJECT,
     NetMsgType::SENDHEADERS,
-    NetMsgType::FEEFILTER,
     NetMsgType::SENDCMPCT,
     NetMsgType::CMPCTBLOCK,
     NetMsgType::GETBLOCKTXN,

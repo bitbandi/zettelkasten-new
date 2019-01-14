@@ -263,10 +263,13 @@ crypto_libbitcoin_crypto_a_SOURCES = \
   crypto/chacha20.h \
   crypto/chacha20.cpp \
   crypto/common.h \
+  crypto/ecdsa.cpp \
+  crypto/ecdsa.h \
   crypto/hmac_sha256.cpp \
   crypto/hmac_sha256.h \
   crypto/hmac_sha512.cpp \
   crypto/hmac_sha512.h \
+  crypto/powhash.h \
   crypto/ripemd160.cpp \
   crypto/ripemd160.h \
   crypto/scrypt.cpp \
@@ -277,7 +280,10 @@ crypto_libbitcoin_crypto_a_SOURCES = \
   crypto/sha256.cpp \
   crypto/sha256.h \
   crypto/sha512.cpp \
-  crypto/sha512.h
+  crypto/sha512.h \
+  crypto/sph_keccak.c \
+  crypto/sph_keccak.h \
+  crypto/sph_types.h
 
 if USE_ASM
 crypto_libbitcoin_crypto_a_SOURCES += crypto/sha256_sse4.cpp

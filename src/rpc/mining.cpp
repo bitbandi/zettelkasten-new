@@ -17,9 +17,14 @@
 #include <net.h>
 #include <policy/fees.h>
 #include <pow.h>
+#include <crypto/ecdsa.h>
 #include <rpc/blockchain.h>
 #include <rpc/mining.h>
 #include <rpc/server.h>
+#ifdef ENABLE_WALLET
+#include <wallet/rpcwallet.h>
+#include <wallet/wallet.h>
+#endif
 #include <txmempool.h>
 #include <util.h>
 #include <utilstrencodings.h>
@@ -126,7 +131,23 @@ UniValue generateBlocks(std::shared_ptr<CReserveScript> coinbaseScript, int nGen
             LOCK(cs_main);
             IncrementExtraNonce(pblock, chainActive.Tip(), nExtraNonce);
         }
+        CDataStream PoKData(SER_GETHASH, 0);
+        pblock->GetPoKData(PoKData);
+        uint8_t* pNonce = (uint8_t *)&(*PoKData.begin()); //&PoKData[0];
+        uint8_t* pBlockTime = (uint8_t *)&(*(PoKData.begin()+4)); //&PoKData[4];
+        uint8_t* pMinerSignature = (uint8_t *)&(*(PoKData.begin()+12)); // &PoKData[12];
+        CSignerECDSA Signer(coinbaseScript->key.begin(), pblock->MinerSignature.begin());
+
         while (nMaxTries > 0 && pblock->nNonce < nInnerLoopCount && !CheckProofOfWork(pblock->GetPoWHash(), pblock->nBits, Params().GetConsensus())) {
+            if ((pblock->nNonce & NONCE_MASK) == 0)
+            {
+                memcpy(pBlockTime, &pblock->nTime, sizeof(pblock->nTime));
+                memcpy(pNonce, &pblock->nNonce, sizeof(pblock->nNonce));
+                Signer.SignFast(pblock->GetHashForSignature(), pblock->MinerSignature.begin());
+                memcpy(pMinerSignature, pblock->MinerSignature.begin(), pblock->MinerSignature.size());
+                pblock->hashWholeBlock = pblock->HashPoKData(PoKData);
+            }
+
             ++pblock->nNonce;
             --nMaxTries;
         }
@@ -153,10 +174,17 @@ UniValue generateBlocks(std::shared_ptr<CReserveScript> coinbaseScript, int nGen
 
 UniValue generatetoaddress(const JSONRPCRequest& request)
 {
+#ifdef ENABLE_WALLET
+    CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
+#endif
+
     if (request.fHelp || request.params.size() < 2 || request.params.size() > 3)
         throw std::runtime_error(
             "generatetoaddress nblocks address (maxtries)\n"
             "\nMine blocks immediately to a specified address (before the RPC call returns)\n"
+#ifdef ENABLE_WALLET
+            + HelpRequiringPassphrase(pwallet) + "\n"
+#endif
             "\nArguments:\n"
             "1. nblocks      (numeric, required) How many blocks are generated immediately.\n"
             "2. address      (string, required) The address to send the newly generated litecoin to.\n"
@@ -174,13 +202,39 @@ UniValue generatetoaddress(const JSONRPCRequest& request)
         nMaxTries = request.params[2].get_int();
     }
 
-    CTxDestination destination = DecodeDestination(request.params[1].get_str());
-    if (!IsValidDestination(destination)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Error: Invalid address");
-    }
+#ifdef ENABLE_WALLET
+    LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : nullptr);
+#else
+    LOCK(cs_main);
+#endif
 
-    std::shared_ptr<CReserveScript> coinbaseScript = std::make_shared<CReserveScript>();
-    coinbaseScript->reserveScript = GetScriptForDestination(destination);
+    std::shared_ptr<CReserveScript> coinbaseScript;
+    CKey MiningKey;
+    if (request.params[1].isNull())
+    {
+        CBitcoinSecret Secret;
+        coinbaseScript = std::make_shared<CReserveScript>();
+        Secret.SetString(request.params[1].get_str());
+        if (Secret.IsValid()) {
+            coinbaseScript->key = Secret.GetKey();
+            coinbaseScript->reserveScript = CScript() << coinbaseScript->key.GetPubKey().GetID() << OP_CHECKSIG;
+        }
+    }
+#ifdef ENABLE_WALLET
+    else if (pwallet) {
+        EnsureWalletIsUnlocked(pwallet);
+        pwallet->GetScriptForMining(coinbaseScript);
+        // If the keypool is exhausted, no script is returned at all.  Catch this.
+        if (!coinbaseScript) {
+            throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT, "Error: Keypool ran out, please call keypoolrefill first");
+        }
+    }
+#endif
+
+    //throw an error if no script was provided
+    if (coinbaseScript->reserveScript.empty()) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "No coinbase script available");
+    }
 
     return generateBlocks(coinbaseScript, nGenerate, nMaxTries, false);
 }

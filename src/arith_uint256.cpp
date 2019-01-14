@@ -149,13 +149,22 @@ double base_uint<BITS>::getdouble() const
 template <unsigned int BITS>
 std::string base_uint<BITS>::GetHex() const
 {
-    return ArithToUint256(*this).GetHex();
+    base_blob<BITS> rv;
+    base_uint<BITS> a(*this);
+    for(int x=0; x<a.WIDTH; ++x)
+        WriteLE32(rv.begin() + x*4, a.pn[x]);
+    return rv.GetHex();
 }
 
 template <unsigned int BITS>
 void base_uint<BITS>::SetHex(const char* psz)
 {
-    *this = UintToArith256(uint256S(psz));
+    base_blob<BITS> rv;
+    base_uint<BITS> b;
+    rv.SetHex(psz);
+    for(int x=0; x<b.WIDTH; ++x)
+        b.pn[x] = ReadLE32(rv.begin() + x*4);
+    *this = b;
 }
 
 template <unsigned int BITS>
@@ -256,6 +265,82 @@ uint256 ArithToUint256(const arith_uint256 &a)
 arith_uint256 UintToArith256(const uint256 &a)
 {
     arith_uint256 b;
+    for(int x=0; x<b.WIDTH; ++x)
+        b.pn[x] = ReadLE32(a.begin() + x*4);
+    return b;
+}
+
+// Explicit instantiations for base_uint<512>
+template base_uint<512>::base_uint(const std::string&);
+template base_uint<512>& base_uint<512>::operator<<=(unsigned int);
+template base_uint<512>& base_uint<512>::operator>>=(unsigned int);
+template base_uint<512>& base_uint<512>::operator*=(uint32_t b32);
+template base_uint<512>& base_uint<512>::operator*=(const base_uint<512>& b);
+template base_uint<512>& base_uint<512>::operator/=(const base_uint<512>& b);
+template int base_uint<512>::CompareTo(const base_uint<512>&) const;
+template bool base_uint<512>::EqualTo(uint64_t) const;
+template double base_uint<512>::getdouble() const;
+template std::string base_uint<512>::GetHex() const;
+template std::string base_uint<512>::ToString() const;
+template void base_uint<512>::SetHex(const char*);
+template void base_uint<512>::SetHex(const std::string&);
+template unsigned int base_uint<512>::bits() const;
+
+// This implementation directly uses shifts instead of going
+// through an intermediate MPI representation.
+arith_uint512& arith_uint512::SetCompact(uint32_t nCompact, bool* pfNegative, bool* pfOverflow)
+{
+    int nSize = nCompact >> 24;
+    uint32_t nWord = nCompact & 0x007fffff;
+    if (nSize <= 3) {
+        nWord >>= 8 * (3 - nSize);
+        *this = nWord;
+    } else {
+        *this = nWord;
+        *this <<= 8 * (nSize - 3);
+    }
+    if (pfNegative)
+        *pfNegative = nWord != 0 && (nCompact & 0x00800000) != 0;
+    if (pfOverflow)
+        *pfOverflow = nWord != 0 && ((nSize > 66) ||
+                                     (nWord > 0xff && nSize > 65) ||
+                                     (nWord > 0xffff && nSize > 64));
+    return *this;
+}
+
+uint32_t arith_uint512::GetCompact(bool fNegative) const
+{
+    int nSize = (bits() + 7) / 8;
+    uint32_t nCompact = 0;
+    if (nSize <= 3) {
+        nCompact = GetLow64() << 8 * (3 - nSize);
+    } else {
+        arith_uint512 bn = *this >> 8 * (nSize - 3);
+        nCompact = bn.GetLow64();
+    }
+    // The 0x00800000 bit denotes the sign.
+    // Thus, if it is already set, divide the mantissa by 512 and increase the exponent.
+    if (nCompact & 0x00800000) {
+        nCompact >>= 8;
+        nSize++;
+    }
+    assert((nCompact & ~0x007fffff) == 0);
+    assert(nSize < 512);
+    nCompact |= nSize << 24;
+    nCompact |= (fNegative && (nCompact & 0x007fffff) ? 0x00800000 : 0);
+    return nCompact;
+}
+
+uint512 ArithToUint512(const arith_uint512 &a)
+{
+    uint512 b;
+    for(int x=0; x<a.WIDTH; ++x)
+        WriteLE32(b.begin() + x*4, a.pn[x]);
+    return b;
+}
+arith_uint512 UintToArith512(const uint512 &a)
+{
+    arith_uint512 b;
     for(int x=0; x<b.WIDTH; ++x)
         b.pn[x] = ReadLE32(a.begin() + x*4);
     return b;

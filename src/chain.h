@@ -209,15 +209,20 @@ public:
     //! block header
     int32_t nVersion;
     uint256 hashMerkleRoot;
-    uint32_t nTime;
+    uint64_t nTime;
     uint32_t nBits;
+//    uint32_t nHeight;
     uint32_t nNonce;
+
+    uint256 hashWholeBlock; // proof of whole block knowledge
+    CMinerSignature MinerSignature; // proof of private key knowledge
+    ABCBytesForSDKPGAB ABCBytes;
 
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     int32_t nSequenceId;
 
     //! (memory only) Maximum nTime in the chain up to and including this block.
-    unsigned int nTimeMax;
+    uint64_t nTimeMax;
 
     void SetNull()
     {
@@ -240,6 +245,8 @@ public:
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
+        MinerSignature = CMinerSignature();
+        ABCBytes       = ABCBytesForSDKPGAB();
     }
 
     CBlockIndex()
@@ -253,9 +260,13 @@ public:
 
         nVersion       = block.nVersion;
         hashMerkleRoot = block.hashMerkleRoot;
+        hashWholeBlock = block.hashWholeBlock;
+        MinerSignature = block.MinerSignature;
         nTime          = block.nTime;
         nBits          = block.nBits;
+//        nHeight        = block.nHeight;
         nNonce         = block.nNonce;
+        ABCBytes       = block.ABCBytes;
     }
 
     CDiskBlockPos GetBlockPos() const {
@@ -283,9 +294,13 @@ public:
         if (pprev)
             block.hashPrevBlock = pprev->GetBlockHash();
         block.hashMerkleRoot = hashMerkleRoot;
+        block.hashWholeBlock = hashWholeBlock;
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        block.nHeight        = nHeight;
+        block.MinerSignature = MinerSignature;
+        block.ABCBytes       = ABCBytes;
         return block;
     }
 
@@ -410,6 +425,9 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
+        READWRITE(hashWholeBlock);
+        READWRITE(MinerSignature);
+        READWRITE(ABCBytes);
     }
 
     uint256 GetBlockHash() const
@@ -418,9 +436,13 @@ public:
         block.nVersion        = nVersion;
         block.hashPrevBlock   = hashPrev;
         block.hashMerkleRoot  = hashMerkleRoot;
+        block.hashWholeBlock  = hashWholeBlock;
         block.nTime           = nTime;
         block.nBits           = nBits;
+        block.nHeight         = nHeight;
         block.nNonce          = nNonce;
+        block.MinerSignature  = MinerSignature;
+        block.ABCBytes        = ABCBytes;
         return block.GetHash();
     }
 

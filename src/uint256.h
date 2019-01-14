@@ -156,4 +156,54 @@ inline uint256 uint256S(const std::string& str)
     return rv;
 }
 
+/** 512-bit opaque blob.
+ * @note This type is called uint512 for historical reasons only. It is an
+ * opaque blob of 512 bits and has no integer operations. Use arith_uint512 if
+ * those are required.
+ */
+class uint512 : public base_blob<512> {
+public:
+    uint512() {}
+    explicit uint512(const std::vector<unsigned char>& vch) : base_blob<512>(vch) {}
+
+    /** A cheap hash function that just returns 64 bits from the result, it can be
+     * used when the contents are considered uniformly random. It is not appropriate
+     * when the value can easily be influenced from outside as e.g. a network adversary could
+     * provide values to trigger worst-case behavior.
+     */
+    uint64_t GetCheapHash() const
+    {
+        return ReadLE64(data);
+    }
+
+    uint256 trim256() const
+    {
+        uint256 result;
+        memcpy((void*)&result, (void*)data, 32);
+        return result;
+    }
+};
+
+/* uint512 from const char *.
+ * This is a separate function because the constructor uint512(const char*) can result
+ * in dangerously catching uint512(0).
+ */
+inline uint512 uint512S(const char *str)
+{
+    uint512 rv;
+    rv.SetHex(str);
+    return rv;
+}
+/* uint512 from std::string.
+ * This is a separate function because the constructor uint512(const std::string &str) can result
+ * in dangerously catching uint512(0) via std::string(const char*).
+ */
+inline uint512 uint512S(const std::string& str)
+{
+    uint512 rv;
+    rv.SetHex(str);
+    return rv;
+}
+
+
 #endif // BITCOIN_UINT256_H

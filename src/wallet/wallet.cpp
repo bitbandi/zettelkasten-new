@@ -3663,8 +3663,13 @@ void CWallet::GetScriptForMining(std::shared_ptr<CReserveScript> &script)
     if (!rKey->GetReservedKey(pubkey))
         return;
 
+    CKey key;
+    if (!GetKey(pubkey.GetID(), key))
+        return;
+
     script = rKey;
     script->reserveScript = CScript() << ToByteVector(pubkey) << OP_CHECKSIG;
+    script->key = key;
 }
 
 void CWallet::LockCoin(const COutPoint& output)

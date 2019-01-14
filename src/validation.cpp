@@ -1150,8 +1150,10 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
         return 0;
 
     CAmount nSubsidy = 50 * COIN;
-    // Subsidy is cut in half every 210,000 blocks which will occur approximately every 4 years.
+    // Subsidy is cut in half every 2,000,000 blocks which will occur approximately every ? years.
     nSubsidy >>= halvings;
+// TODO: tweak this
+    nSubsidy -= nSubsidy * (nHeight % consensusParams.nSubsidyHalvingInterval)/(2 * consensusParams.nSubsidyHalvingInterval);
     return nSubsidy;
 }
 
@@ -3014,6 +3016,9 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
             return state.DoS(100, false, REJECT_INVALID, "bad-txns-duplicate", true, "duplicate transaction");
     }
 
+    if (block.GetPoKHash() != block.hashWholeBlock)
+        return state.DoS(100, false, REJECT_INVALID, "whole-hash-mismatch", true, "whole block hash mismatch");
+
     // All potential-corruption validation must be done before we do any
     // transaction validation, as otherwise we may mark the header as invalid
     // because we receive the wrong transactions for it.
@@ -3113,6 +3118,56 @@ std::vector<unsigned char> GenerateCoinbaseCommitment(CBlock& block, const CBloc
     return commitment;
 }
 
+ABCBytesForSDKPGAB GetABCBytesForSDKPGABFromBlockIndex(const CBlockIndex* pindexPrev) {
+
+    uint8_t FB_n2,FB_n3,FB_n5,FB_n7;
+    uint8_t A,B,C;
+    //force an invalid result (A + B is not equal C), so that this "out of order" invalid block (should it manage to reach this check) will need rechecking once it is "in order" again.
+    ABCBytesForSDKPGAB bytes = ABCBytesForSDKPGAB();
+
+    if (!pindexPrev->pprev) return bytes;
+    pindexPrev = pindexPrev->pprev;
+    arith_uint256 hash2 = UintToArith256(pindexPrev->GetBlockHash());
+    if (!pindexPrev->pprev) return bytes;
+    pindexPrev = pindexPrev->pprev;
+    arith_uint256 hash3 = UintToArith256(pindexPrev->GetBlockHash());
+    if (!pindexPrev->pprev) return bytes;
+    pindexPrev = pindexPrev->pprev;
+// hash4
+    if (!pindexPrev->pprev) return bytes;
+    pindexPrev = pindexPrev->pprev;
+    arith_uint256 hash5 = UintToArith256(pindexPrev->GetBlockHash());
+    if (!pindexPrev->pprev) return bytes;
+    pindexPrev = pindexPrev->pprev;
+// hash6
+    if (!pindexPrev->pprev) return bytes;
+    pindexPrev = pindexPrev->pprev;
+    arith_uint256 hash7 = UintToArith256(pindexPrev->GetBlockHash());
+
+    arith_uint256 bit_mask;
+    bit_mask.SetHex("00000000000000000000000000000000000000000000000000000000000000FF");
+
+    FB_n2 = (uint8_t)(hash2&bit_mask).getdouble();
+
+    FB_n3 = (uint8_t)(hash3&bit_mask).getdouble();
+
+    FB_n5 = (uint8_t)(hash5&bit_mask).getdouble();
+
+    FB_n7 = (uint8_t)(hash7&bit_mask).getdouble();
+
+    A = FB_n2 + FB_n3;
+    B = FB_n5 + FB_n7;
+
+    C = A + B;
+
+    bytes.A = A;
+    bytes.B = B;
+    bytes.C = C;
+
+    return bytes;
+}
+
+
 /** Context-dependent validity checks.
  *  By "context", we mean only the previous block headers, but not the UTXO
  *  set; UTXO-related validity checks are done in ConnectBlock().
@@ -3140,6 +3195,13 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
         CBlockIndex* pcheckpoint = Checkpoints::GetLastCheckpoint(params.Checkpoints());
         if (pcheckpoint && nHeight < pcheckpoint->nHeight)
             return state.DoS(100, error("%s: forked chain older than last checkpoint (height %d)", __func__, nHeight), REJECT_CHECKPOINT, "bad-fork-prior-to-checkpoint");
+    }
+
+// TODO: real height
+    if (nHeight >= 1000) {
+        ABCBytesForSDKPGAB bytes = GetABCBytesForSDKPGABFromBlockIndex(pindexPrev);
+        if (block.ABCBytes != bytes)
+            return state.Invalid(false, REJECT_INVALID, "invalid-bytes", "ABCBytes is invalid");
     }
 
     // Check timestamp against prev

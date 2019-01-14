@@ -11,11 +11,27 @@
 #include <uint256.h>
 #include <util.h>
 
+
+static uint32_t invertCompact(uint32_t nBits)
+{
+    uint8_t nSize = nBits >> 24;
+    uint32_t nWord = nBits & 0x007fffff;
+    uint8_t nSize2 = 33 - nSize;
+    uint64_t nWord2 = 0x10000000000ULL/nWord;
+    while (nWord2 >= 0x800000ULL)
+    {
+        nWord2 >>= 8;
+        nSize2++;
+    }
+    return (nSize2 << 24) | nWord2;
+}
+
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
 {
     assert(pindexLast != nullptr);
     unsigned int nProofOfWorkLimit = UintToArith256(params.powLimit).GetCompact();
 
+#if 0
     // Only change once per difficulty adjustment interval
     if ((pindexLast->nHeight+1) % params.DifficultyAdjustmentInterval() != 0)
     {
@@ -49,29 +65,40 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     const CBlockIndex* pindexFirst = pindexLast;
     for (int i = 0; pindexFirst && i < blockstogoback; i++)
         pindexFirst = pindexFirst->pprev;
+#endif
+
+    if (pindexLast->nHeight <= params.DifficultyAdjustmentInterval() + 2)
+        return nProofOfWorkLimit;
+
+    arith_uint512 bnNew = 0;
+    const CBlockIndex* pindexFirst = pindexLast;
+    int blockstogoback = params.DifficultyAdjustmentInterval();
+    for (int i = 0; pindexFirst && i < blockstogoback; i++)
+    {
+        // rewrite invertCompact
+        bnNew += arith_uint512().SetCompact(invertCompact(pindexFirst->nBits));
+        pindexFirst = pindexFirst->pprev;
+    }
+    bnNew = (arith_uint512(blockstogoback)<<256) / bnNew;
 
     assert(pindexFirst);
 
-    return CalculateNextWorkRequired(pindexLast, pindexFirst->GetBlockTime(), params);
+    return CalculateNextWorkRequired(UintToArith256(ArithToUint512(bnNew).trim256()), pindexLast, pindexFirst->GetBlockTime(), params);
 }
 
-unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nFirstBlockTime, const Consensus::Params& params)
+unsigned int CalculateNextWorkRequired(arith_uint256 bnNew, const CBlockIndex* pindexLast, int64_t nFirstBlockTime, const Consensus::Params& params)
 {
     if (params.fPowNoRetargeting)
         return pindexLast->nBits;
 
     // Limit adjustment step
     int64_t nActualTimespan = pindexLast->GetBlockTime() - nFirstBlockTime;
-    if (nActualTimespan < params.nPowTargetTimespan/4)
-        nActualTimespan = params.nPowTargetTimespan/4;
-    if (nActualTimespan > params.nPowTargetTimespan*4)
-        nActualTimespan = params.nPowTargetTimespan*4;
+    if (nActualTimespan < params.nPowTargetTimespan/3)
+        nActualTimespan = params.nPowTargetTimespan/3;
+    if (nActualTimespan > params.nPowTargetTimespan*3)
+        nActualTimespan = params.nPowTargetTimespan*3;
 
     // Retarget
-    arith_uint256 bnNew;
-    arith_uint256 bnOld;
-    bnNew.SetCompact(pindexLast->nBits);
-    bnOld = bnNew;
     // Litecoin: intermediate uint256 can overflow by 1 bit
     const arith_uint256 bnPowLimit = UintToArith256(params.powLimit);
     bool fShift = bnNew.bits() > bnPowLimit.bits() - 1;

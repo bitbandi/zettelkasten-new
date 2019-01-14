@@ -9,7 +9,7 @@
  * network protocol versioning
  */
 
-static const int PROTOCOL_VERSION = 70015;
+static const int PROTOCOL_VERSION = 70024;
 
 //! initial proto version, to be increased after version/verack negotiation
 static const int INIT_PROTO_VERSION = 209;
@@ -31,10 +31,7 @@ static const int BIP0031_VERSION = 60000;
 static const int NO_BLOOM_VERSION = 70011;
 
 //! "sendheaders" command and announcing blocks with headers starts with this version
-static const int SENDHEADERS_VERSION = 70012;
-
-//! "feefilter" tells peers to filter invs to you by fee starts with this version
-static const int FEEFILTER_VERSION = 70013;
+static const int SENDHEADERS_VERSION = 70024;
 
 //! short-id-based block download starts with this version
 static const int SHORT_IDS_BLOCKS_VERSION = 70014;

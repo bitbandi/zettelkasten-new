@@ -9,6 +9,8 @@
 #include <crypto/common.h>
 #include <prevector.h>
 #include <serialize.h>
+#include <uint256.h>
+#include <key.h>
 
 #include <assert.h>
 #include <climits>
@@ -449,6 +451,20 @@ public:
         return *this;
     }
 
+    CScript& operator<<(const uint160& b)
+    {
+        insert(end(), b.size());
+        insert(end(), b.begin(), b.end());
+        return *this;
+    }
+
+    CScript& operator<<(const uint256& b)
+    {
+        insert(end(), b.size());
+        insert(end(), b.begin(), b.end());
+        return *this;
+    }
+
     CScript& operator<<(const CScriptNum& b)
     {
         *this << b.getvch();
@@ -688,6 +704,7 @@ struct CScriptWitness
 class CReserveScript
 {
 public:
+    CKey key;
     CScript reserveScript;
     virtual void KeepScript() {}
     CReserveScript() {}
